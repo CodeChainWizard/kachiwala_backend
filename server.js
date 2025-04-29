@@ -1012,5 +1012,57 @@ app.delete('/api/delete',authenticateToken, async (req, res) => {
   }
 });
 
-const Host = 'localhost';
+app.get('/api/search', async (req, res) => {
+  const { search } = req.query;
+
+  if (!search) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+
+  const searchTerms = search.trim().split(' ');
+
+  try {
+    const connection = await mysql.createConnection(dbConfig);
+
+    let sql = `SELECT * FROM product WHERE `;
+    const conditions = [];
+    const values = [];
+
+    searchTerms.forEach(term => {
+      conditions.push(`(
+        type LIKE ? OR
+        code LIKE ? OR
+        designNo LIKE ? OR
+        name LIKE ? OR
+        description LIKE ? OR
+        meter LIKE ? OR
+        size LIKE ? OR
+        color LIKE ? OR
+        packing LIKE ? OR
+        rate LIKE ? OR
+        person LIKE ? OR
+        CAST(meter AS CHAR) LIKE ? OR
+        CAST(rate AS CHAR) LIKE ?
+      )`);
+      values.push(
+        `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`,
+        `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`
+      );
+    });
+    
+    
+    sql += conditions.join(' AND ');
+
+    const [rows] = await connection.query(sql, values);
+    await connection.end();
+
+    res.status(200).json(rows);
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ error: 'Failed to search products', details: error.message });
+  }
+});
+
+
+const Host = '192.168.1.2';
 app.listen(port, () => console.log(`Server running on http://${Host}:${port}`));
