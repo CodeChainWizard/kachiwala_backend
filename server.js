@@ -1013,13 +1013,18 @@ app.delete('/api/delete',authenticateToken, async (req, res) => {
 });
 
 app.get('/api/search', async (req, res) => {
-  const { search } = req.query;
+  const { search, filters } = req.query;
 
   if (!search) {
     return res.status(400).json({ error: 'Search query is required' });
   }
 
   const searchTerms = search.trim().split(' ');
+  const filterList = filters ? filters.split(',') : [];
+
+  const allowedFilters = [
+    'Type', 'Price', 'Meter', 'Color'
+  ]; // Match this to frontend filter names
 
   try {
     const connection = await mysql.createConnection(dbConfig);
@@ -1029,28 +1034,42 @@ app.get('/api/search', async (req, res) => {
     const values = [];
 
     searchTerms.forEach(term => {
-      conditions.push(`(
-        type LIKE ? OR
-        code LIKE ? OR
-        designNo LIKE ? OR
-        name LIKE ? OR
-        description LIKE ? OR
-        meter LIKE ? OR
-        size LIKE ? OR
-        color LIKE ? OR
-        packing LIKE ? OR
-        rate LIKE ? OR
-        person LIKE ? OR
-        CAST(meter AS CHAR) LIKE ? OR
-        CAST(rate AS CHAR) LIKE ?
-      )`);
-      values.push(
-        `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`,
-        `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`, `%${term}%`
-      );
+      const termConditions = [];
+
+      if (filterList.length === 0 || filterList.includes('All')) {
+        // Search across all fields
+        termConditions.push(
+          'type LIKE ?', 'code LIKE ?', 'designNo LIKE ?', 'name LIKE ?',
+          'description LIKE ?', 'meter LIKE ?', 'size LIKE ?', 'color LIKE ?',
+          'packing LIKE ?', 'rate LIKE ?', 'person LIKE ?',
+          'CAST(meter AS CHAR) LIKE ?', 'CAST(rate AS CHAR) LIKE ?'
+        );
+        for (let i = 0; i < 13; i++) {
+          values.push(`%${term}%`);
+        }
+      } else {
+        // Filter-specific search
+        if (filterList.includes('Type')) {
+          termConditions.push('type LIKE ?');
+          values.push(`%${term}%`);
+        }
+        if (filterList.includes('Price')) {
+          termConditions.push('rate LIKE ?');
+          values.push(`%${term}%`);
+        }
+        if (filterList.includes('Meter')) {
+          termConditions.push('meter LIKE ?');
+          values.push(`%${term}%`);
+        }
+        if (filterList.includes('Color')) {
+          termConditions.push('color LIKE ?');
+          values.push(`%${term}%`);
+        }
+      }
+
+      conditions.push(`(${termConditions.join(' OR ')})`);
     });
-    
-    
+
     sql += conditions.join(' AND ');
 
     const [rows] = await connection.query(sql, values);
@@ -1064,5 +1083,6 @@ app.get('/api/search', async (req, res) => {
 });
 
 
-const Host = '192.168.1.2';
+
+const Host = '192.168.42.243';
 app.listen(port, () => console.log(`Server running on http://${Host}:${port}`));
